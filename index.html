@@ -3,136 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple JS Password Vault</title>
+    <title>Pro Password Vault</title>
     <style>
-        /* CSS: Styling the UI */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7f6;
-            display: flex;
-            justify-content: center;
-            padding: 50px;
+        :root {
+            --primary: #6366f1;
+            --secondary: #64748b;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --bg: #f8fafc;
         }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            width: 400px;
+        body { font-family: 'Inter', sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
+        .hidden { display: none; }
+        
+        h2 { text-align: center; color: #1e293b; margin-bottom: 20px; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #e2e8f0; border-radius: 0.5rem; box-sizing: border-box; }
+        
+        /* Buttons */
+        button { padding: 10px 15px; border: none; border-radius: 0.5rem; cursor: pointer; font-weight: 600; transition: 0.2s; }
+        .btn-main { width: 100%; background: var(--primary); color: white; margin-top: 10px; }
+        .btn-main:hover { background: #4f46e5; }
+        
+        /* List Styling */
+        .vault-item { 
+            background: #ffffff;
+            border: 1px solid #f1f5f9;
+            padding: 15px; 
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex; 
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
-        h2 { text-align: center; color: #333; }
-        input {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            box-sizing: border-box;
-        }
-        button {
-            width: 100%;
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        button:hover { background-color: #0056b3; }
-        .entry-list { margin-top: 20px; border-top: 1px solid #eee; }
-        .entry-item {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .delete-btn {
-            background: #ff4757;
-            width: auto;
-            padding: 5px 10px;
-            font-size: 12px;
-        }
+        .item-info { display: flex; justify-content: space-between; align-items: flex-start; }
+        .item-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        
+        /* Small Utility Buttons */
+        .util-btn { font-size: 12px; background: #f1f5f9; color: #475569; }
+        .util-btn:hover { background: #e2e8f0; }
+        .del-btn { background: #fee2e2; color: var(--danger); }
+        .del-btn:hover { background: var(--danger); color: white; }
+
+        .pass-container { font-family: monospace; background: #f8fafc; padding: 5px 10px; border-radius: 4px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Password Vault</h2>
-    
-    <div id="add-form">
-        <input type="text" id="siteName" placeholder="Website Name (e.g. Google)">
-        <input type="text" id="username" placeholder="Username/Email">
-        <input type="password" id="password" placeholder="Password">
-        <button onclick="savePassword()">Save Password</button>
+<div class="card">
+    <div id="login-section">
+        <h2>🔒login</h2>
+        <input type="password" id="master-input" placeholder="Password">
+        <button class="btn-main" onclick="checkLogin()">Unlock Vault</button>
     </div>
 
-    <div class="entry-list" id="passwordList">
-        </div>
+    <div id="vault-section" class="hidden">
+        <h2>🔑 My Vault</h2>
+        <input type="text" id="site" placeholder="Website (e.g. Netflix)">
+        <input type="text" id="user" placeholder="Username/Email">
+        <input type="password" id="pass" placeholder="Password">
+        <button class="btn-main" onclick="saveEntry()">Add to Vault</button>
+
+        <div id="list-container" style="margin-top: 25px;"></div>
+        
+        <button class="btn-main" style="background: var(--secondary);" onclick="logout()">Lock & Exit</button>
+    </div>
 </div>
-
 <script>
-    // JS: Handling Logic and Storage
-    const passwordListDiv = document.getElementById('passwordList');
+    const MASTER_KEY = "My$ecretK3y";
+    const loginSection = document.getElementById('login-section');
+    const vaultSection = document.getElementById('vault-section');
+    const listContainer = document.getElementById('list-container');
 
-    // Load data on startup
-    window.onload = displayPasswords;
-
-    function savePassword() {
-        const site = document.getElementById('siteName').value;
-        const user = document.getElementById('username').value;
-        const pass = document.getElementById('password').value;
-
-        if (!site || !user || !pass) {
-            alert("Please fill in all fields!");
-            return;
-        }
-
-        const entry = { site, user, pass };
-
-        // Get existing passwords from LocalStorage
-        let passwords = JSON.parse(localStorage.getItem('myPasswords')) || [];
-        
-        // Add new entry
-        passwords.push(entry);
-        
-        // Save back to LocalStorage
-        localStorage.setItem('myPasswords', JSON.stringify(passwords));
-
-        // Clear inputs and refresh list
-        document.getElementById('siteName').value = '';
-        document.getElementById('username').value = '';
-        document.getElementById('password').value = '';
-        displayPasswords();
+    function checkLogin() {
+        if (document.getElementById('master-input').value === MASTER_KEY) {
+            loginSection.classList.add('hidden');
+            vaultSection.classList.remove('hidden');
+            renderVault();
+        } else { alert("Wrong key!"); }
     }
 
-    function displayPasswords() {
-        let passwords = JSON.parse(localStorage.getItem('myPasswords')) || [];
-        passwordListDiv.innerHTML = '<h3>Stored Accounts</h3>';
+    function logout() {
+        vaultSection.classList.add('hidden');
+        loginSection.classList.remove('hidden');
+        document.getElementById('master-input').value = "";
+    }
 
-        if (passwords.length === 0) {
-            passwordListDiv.innerHTML += '<p style="color:gray; font-size:14px;">No passwords saved yet.</p>';
-        }
+    function saveEntry() {
+        const site = document.getElementById('site').value;
+        const user = document.getElementById('user').value;
+        const pass = document.getElementById('pass').value;
+        if(!site || !user || !pass) return;
 
-        passwords.forEach((item, index) => {
-            passwordListDiv.innerHTML += `
-                <div class="entry-item">
+        const data = JSON.parse(localStorage.getItem('vaultData')) || [];
+        data.push({ site, user, pass });
+        localStorage.setItem('vaultData', JSON.stringify(data));
+        
+        document.querySelectorAll('#vault-section input').forEach(i => i.value = '');
+        renderVault();
+    }
+
+    function renderVault() {
+        const data = JSON.parse(localStorage.getItem('vaultData')) || [];
+        listContainer.innerHTML = '';
+        
+        data.forEach((item, index) => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'vault-item';
+            itemDiv.innerHTML = `
+                <div class="item-info">
                     <div>
-                        <strong>${item.site}</strong><br>
-                        <small>${item.user} | ${item.pass}</small>
+                        <strong style="color:var(--primary)">${item.site}</strong><br>
+                        <small style="color:var(--secondary)">${item.user}</small>
                     </div>
-                    <button class="delete-btn" onclick="deletePassword(${index})">Delete</button>
+                </div>
+                <div class="pass-container">
+                    <span id="pass-text-${index}">••••••••</span>
+                    <button class="util-btn" onclick="togglePass(${index}, '${item.pass}')">👁️</button>
+                </div>
+                <div class="item-actions">
+                    <button class="util-btn" onclick="copyPass('${item.pass}', this)">📋 Copy</button>
+                    <button class="util-btn del-btn" onclick="deleteEntry(${index})">🗑️ Delete</button>
                 </div>
             `;
+            listContainer.appendChild(itemDiv);
         });
     }
 
-    function deletePassword(index) {
-        let passwords = JSON.parse(localStorage.getItem('myPasswords'));
-        passwords.splice(index, 1);
-        localStorage.setItem('myPasswords', JSON.stringify(passwords));
-        displayPasswords();
+    // Toggle Eye Visibility
+    function togglePass(index, actualPass) {
+        const span = document.getElementById(`pass-text-${index}`);
+        if (span.innerText === "••••••••") {
+            span.innerText = actualPass;
+        } else {
+            span.innerText = "••••••••";
+        }
+    }
+
+    // Copy to Clipboard logic
+    function copyPass(text, btn) {
+        navigator.clipboard.writeText(text).then(() => {
+            const originalText = btn.innerText;
+            btn.innerText = "✅ Copied!";
+            btn.style.color = "var(--success)";
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.style.color = "";
+            }, 1500);
+        });
+    }
+
+    function deleteEntry(index) {
+        let data = JSON.parse(localStorage.getItem('vaultData'));
+        data.splice(index, 1);
+        localStorage.setItem('vaultData', JSON.stringify(data));
+        renderVault();
     }
 </script>
 
