@@ -3,120 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bio-Secure Vault</title>
+    <title>Simple JS Password Vault</title>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
-        .card { background: white; padding: 25px; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); width: 100%; max-width: 350px; }
-        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-        button { width: 100%; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; margin-top: 10px; transition: 0.2s; }
-        .btn-add { background: #28a745; color: white; }
-        .btn-view { background: #007bff; color: white; width: auto; padding: 6px 12px; font-size: 12px; }
-        .entry { background: #f9f9f9; padding: 12px; margin-top: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee; }
-        .hidden { display: none; }
-        h2 { text-align: center; margin-bottom: 20px; }
+        /* CSS: Styling the UI */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            padding: 50px;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 400px;
+        }
+        h2 { text-align: center; color: #333; }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background-color: #0056b3; }
+        .entry-list { margin-top: 20px; border-top: 1px solid #eee; }
+        .entry-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .delete-btn {
+            background: #ff4757;
+            width: auto;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>My Passwords 🔑</h2>
+<div class="container">
+    <h2>Password Vault</h2>
     
-    <div id="setup-ui">
-        <p style="font-size: 14px; color: #666;">To start, link this app to your phone's security.</p>
-        <button class="btn-add" onclick="register()">Enable Fingerprint</button>
+    <div id="add-form">
+        <input type="text" id="siteName" placeholder="Website Name (e.g. Google)">
+        <input type="text" id="username" placeholder="Username/Email">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="savePassword()">Save Password</button>
     </div>
 
-    <div id="vault-ui" class="hidden">
-        <input type="text" id="siteName" placeholder="Site (e.g. Netflix)">
-        <input type="password" id="sitePass" placeholder="Password">
-        <button class="btn-add" onclick="saveNew()">Save with Fingerprint</button>
-        
-        <div id="list-container" style="margin-top: 25px;">
-            <p style="font-size: 13px; color: #999; font-weight: bold; text-transform: uppercase;">Stored Accounts</p>
-            <div id="items"></div>
+    <div class="entry-list" id="passwordList">
         </div>
-    </div>
 </div>
 
 <script>
-    let vault = JSON.parse(localStorage.getItem('my_secrets') || '[]');
+    // JS: Handling Logic and Storage
+    const passwordListDiv = document.getElementById('passwordList');
 
-    // On Load: Check if setup is done
-    if (localStorage.getItem('setup_done')) {
-        showVault();
-    }
+    // Load data on startup
+    window.onload = displayPasswords;
 
-    function showVault() {
-        document.getElementById('setup-ui').classList.add('hidden');
-        document.getElementById('vault-ui').classList.remove('hidden');
-        renderEntries();
-    }
-
-    // AUTHENTICATION LOGIC
-    async function authenticate() {
-        try {
-            // Real WebAuthn trigger
-            const options = {
-                publicKey: {
-                    challenge: new Uint8Array([1, 2, 3, 4]),
-                    authenticatorSelection: { userVerification: "required" },
-                    pubKeyCredParams: [{ alg: -7, type: "public-key" }]
-                }
-            };
-            // This pops up the Fingerprint/FaceID system tray
-            await navigator.credentials.create(options);
-            return true;
-        } catch (e) {
-            console.error(e);
-            alert("Security Check Failed: Please scan fingerprint.");
-            return false;
-        }
-    }
-
-    // REGISTRATION
-    async function register() {
-        if (await authenticate()) {
-            localStorage.setItem('setup_done', 'true');
-            showVault();
-        }
-    }
-
-    // SAVE NEW PASSWORD
-    async function saveNew() {
+    function savePassword() {
         const site = document.getElementById('siteName').value;
-        const pass = document.getElementById('sitePass').value;
+        const user = document.getElementById('username').value;
+        const pass = document.getElementById('password').value;
+
+        if (!site || !user || !pass) {
+            alert("Please fill in all fields!");
+            return;
+        }
+
+        const entry = { site, user, pass };
+
+        // Get existing passwords from LocalStorage
+        let passwords = JSON.parse(localStorage.getItem('myPasswords')) || [];
         
-        if (!site || !pass) return alert("Enter both fields");
+        // Add new entry
+        passwords.push(entry);
+        
+        // Save back to LocalStorage
+        localStorage.setItem('myPasswords', JSON.stringify(passwords));
 
-        if (await authenticate()) {
-            vault.push({ site, pass });
-            localStorage.setItem('my_secrets', JSON.stringify(vault));
-            renderEntries();
-            document.getElementById('siteName').value = '';
-            document.getElementById('sitePass').value = '';
-        }
+        // Clear inputs and refresh list
+        document.getElementById('siteName').value = '';
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+        displayPasswords();
     }
 
-    // VIEW PASSWORD (RE-AUTHENTICATE)
-    async function viewItem(index) {
-        if (await authenticate()) {
-            const item = vault[index];
-            alert(`Password for ${item.site} is: \n\n ${item.pass}`);
-        }
-    }
+    function displayPasswords() {
+        let passwords = JSON.parse(localStorage.getItem('myPasswords')) || [];
+        passwordListDiv.innerHTML = '<h3>Stored Accounts</h3>';
 
-    function renderEntries() {
-        const container = document.getElementById('items');
-        container.innerHTML = vault.map((entry, i) => `
-            <div class="entry">
-                <div>
-                    <strong style="display:block;">${entry.site}</strong>
-                    <span style="color:#aaa; font-size:12px;">••••••••</span>
+        if (passwords.length === 0) {
+            passwordListDiv.innerHTML += '<p style="color:gray; font-size:14px;">No passwords saved yet.</p>';
+        }
+
+        passwords.forEach((item, index) => {
+            passwordListDiv.innerHTML += `
+                <div class="entry-item">
+                    <div>
+                        <strong>${item.site}</strong><br>
+                        <small>${item.user} | ${item.pass}</small>
+                    </div>
+                    <button class="delete-btn" onclick="deletePassword(${index})">Delete</button>
                 </div>
-                <button class="btn-view" onclick="viewItem(${i})">View</button>
-            </div>
-        `).join('');
+            `;
+        });
+    }
+
+    function deletePassword(index) {
+        let passwords = JSON.parse(localStorage.getItem('myPasswords'));
+        passwords.splice(index, 1);
+        localStorage.setItem('myPasswords', JSON.stringify(passwords));
+        displayPasswords();
     }
 </script>
+
 </body>
 </html>
