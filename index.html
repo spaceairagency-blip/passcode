@@ -1,117 +1,110 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <title>Fingerprint Vault</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BioVault JS</title>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 20px; }
-        .card { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        h2 { color: #333; text-align: center; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .btn-primary { background: #007bff; color: white; margin-top: 10px; }
-        .btn-primary:hover { background: #0056b3; }
-        .entry { background: #f8f9fa; padding: 10px; margin-top: 10px; border-radius: 5px; border-left: 4px solid #007bff; display: flex; justify-content: space-between; align-items: center; }
+        body { font-family: sans-serif; text-align: center; background: #fafafa; padding: 20px; }
+        .card { max-width: 400px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 8px; width: 100%; cursor: pointer; margin-top: 10px; }
         .hidden { display: none; }
+        .entry { text-align: left; background: #eee; margin: 5px 0; padding: 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>BioVault 🔒</h2>
+    <h2>Fingerprint Vault</h2>
     
-    <div id="setup-section">
-        <p>Welcome! Let's secure your vault with your device's fingerprint/PIN.</p>
-        <button class="btn-primary" onclick="setupBiometrics()">Enable Fingerprint</button>
+    <div id="setup">
+        <p>Set up your device fingerprint to start.</p>
+        <button onclick="registerBio()">Enable Fingerprint</button>
     </div>
 
-    <div id="vault-section" class="hidden">
-        <input type="text" id="siteName" placeholder="Site Name (e.g. Google)">
-        <input type="password" id="sitePass" placeholder="Password">
-        <button class="btn-primary" onclick="handleSave()">Store Password (Requires Bio)</button>
-        
-        <hr style="margin: 20px 0;">
-        <h3>Your Passwords</h3>
-        <div id="password-list"></div>
+    <div id="vault" class="hidden">
+        <input type="text" id="site" placeholder="Site Name" style="width:90%; padding:10px; margin-bottom:5px;">
+        <input type="password" id="pass" placeholder="Password" style="width:90%; padding:10px;">
+        <button onclick="saveSecret()">Save with Fingerprint</button>
+        <div id="list" style="margin-top:20px;"></div>
     </div>
 </div>
 
 <script>
-    // Note: We use localStorage to persist data in this single-file demo.
-    let vaultData = JSON.parse(localStorage.getItem('my_vault') || '[]');
+    const setupDiv = document.getElementById('setup');
+    const vaultDiv = document.getElementById('vault');
+    let secrets = JSON.parse(localStorage.getItem('secrets') || '[]');
 
-    // Check if user has already "registered"
-    if (localStorage.getItem('bio_registered')) {
-        showVault();
+    // 1. Check if biometrics are even available on this device/browser
+    async function checkSupport() {
+        if (!window.PublicKeyCredential) return alert("WebAuthn not supported");
+        const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        if (!available) alert("No fingerprint/face sensor found on this device.");
+    }
+    checkSupport();
+
+    // 2. The Actual Fingerprint Trigger (Registration)
+    async function registerBio() {
+        try {
+            // This is the standard WebAuthn "handshake"
+            const options = {
+                publicKey: {
+                    challenge: new Uint8Array([1,2,3,4]), // Normally from a server
+                    rp: { name: "My Vault" },
+                    user: { id: new Uint8Array([1]), name: "user", displayName: "User" },
+                    pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+                    authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" }
+                }
+            };
+            await navigator.credentials.create(options);
+            localStorage.setItem('bio_enabled', 'true');
+            showVault();
+        } catch (e) {
+            alert("Security check failed: " + e.message);
+        }
+    }
+
+    // 3. The Verification Trigger (Authentication)
+    async function verifyBio() {
+        try {
+            const options = {
+                publicKey: {
+                    challenge: new Uint8Array([1,2,3,4]),
+                    allowCredentials: [], // In a real app, you'd pass the registered ID
+                    userVerification: "required"
+                }
+            };
+            // This triggers the native Fingerprint/FaceID/PIN popup
+            await navigator.credentials.get(options);
+            return true;
+        } catch (e) {
+            console.error(e);
+            return false;
+        }
+    }
+
+    async function saveSecret() {
+        const site = document.getElementById('site').value;
+        const pass = document.getElementById('pass').value;
+        if (await verifyBio()) {
+            secrets.push({ site, pass });
+            localStorage.setItem('secrets', JSON.stringify(secrets));
+            render();
+        }
     }
 
     function showVault() {
-        document.getElementById('setup-section').classList.add('hidden');
-        document.getElementById('vault-section').classList.remove('hidden');
-        renderList();
+        setupDiv.classList.add('hidden');
+        vaultDiv.classList.remove('hidden');
+        render();
     }
 
-    // 1. Setup Fingerprint (Registration)
-    async function setupBiometrics() {
-        try {
-            // In a real app, you'd send these options from a server
-            // This is a simplified simulation for the single-file UI
-            alert("Your browser will now ask for your device lock (Fingerprint/PIN/Face).");
-            localStorage.setItem('bio_registered', 'true');
-            showVault();
-        } catch (err) {
-            alert("Biometrics not supported or cancelled.");
-        }
-    }
-
-    // 2. Authentication Wrapper
-    async function verifyUser() {
-        // This triggers the native "Confirm your identity" popup
-        if (window.PublicKeyCredential) {
-            try {
-                // In a production app, you'd use navigator.credentials.get()
-                // For this demo, we use a simple confirmation to simulate the flow
-                const confirmed = confirm("Scan fingerprint to continue?");
-                return confirmed;
-            } catch (e) {
-                return false;
-            }
-        }
-        return true; 
-    }
-
-    async function handleSave() {
-        const site = document.getElementById('siteName').value;
-        const pass = document.getElementById('sitePass').value;
-
-        if(!site || !pass) return alert("Fill all fields");
-
-        if (await verifyUser()) {
-            vaultData.push({ site, pass });
-            localStorage.setItem('my_vault', JSON.stringify(vaultData));
-            renderList();
-            document.getElementById('siteName').value = '';
-            document.getElementById('sitePass').value = '';
-        }
-    }
-
-    async function revealPass(index) {
-        if (await verifyUser()) {
-            alert(`Password for ${vaultData[index].site}: ${vaultData[index].pass}`);
-        }
-    }
-
-    function renderList() {
-        const list = document.getElementById('password-list');
-        list.innerHTML = vaultData.map((item, i) => `
-            <div class="entry">
-                <span>${item.site}</span>
-                <button style="width: auto; padding: 5px 10px;" onclick="revealPass(${i})">View</button>
-            </div>
+    function render() {
+        document.getElementById('list').innerHTML = secrets.map(s => `
+            <div class="entry"><b>${s.site}</b>: ***** </div>
         `).join('');
     }
-</script>
 
+    if (localStorage.getItem('bio_enabled')) showVault();
+</script>
 </body>
 </html>
